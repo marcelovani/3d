@@ -1,0 +1,216 @@
+# Engine model — 3D print with working flywheel and fan
+
+Project folder: `~/Development/Projects/3d/Models/Engine/` — `NOTES.md` (this file), `build.sh`, `scripts/`, `source/`, `output/`, `images/`.
+
+Started 2026-11-13.
+
+## Goal
+
+Print a simplified copy of the downloaded engine model, about **10 cm long**, with a small motor inside
+that turns the flywheel and, through a rubber-band belt, the fan at the front, so it looks like a running engine.
+
+## Source model
+
+| File                                                             | Contents                                      |
+| ---------------------------------------------------------------- | --------------------------------------------- |
+| `source/engine-gltf.zip` (copy of `~/Downloads/archive (2).zip`) | `scene.gltf` + `scene.bin` — **working copy** |
+| `source/engine.usdz` (copy of `~/Downloads/scene.usdz`)          | Same model as USD (`scene.usdc`), not used    |
+
+- 143 meshes, ~2.3 million triangles — far too detailed to print at 10 cm.
+- Proportions (x, y, z): 0.659 × 0.584 × 0.726 model units.
+- Front: fan, water-pump pulley, alternator, crank pulley, belt. Back: flywheel with ring gear.
+- Parts have **no useful names** (`Mesh_0`…`Mesh_142`, materials `App…`), and some meshes were merged
+  by material, so one mesh can hold several physical parts. Parts are identified by position, shape
+  and a labelled contact sheet.
+
+## Part map (from contact sheet `images/engine-parts-contact-sheet.png`)
+
+| Part                       | Mesh     | Note                                       |
+| -------------------------- | -------- | ------------------------------------------ |
+| Flywheel (incl. ring gear) | Mesh_115 | Merged with small pieces elsewhere — split |
+| Fan                        | Mesh_17  |                                            |
+| Fan pulley (behind fan)    | Mesh_25  | Merged with other pieces — split           |
+| Crank pulley (lower front) | Mesh_138 | Merged with other pieces — split           |
+
+**The file is upside down** — rotate 180° around X (the crank axis) before any work. Plan image:
+`images/engine-plan.png`.
+| Belt | Mesh_3 | Removed — rubber band replaces it |
+| Crankshaft | Mesh_104 | Its axis = where the 3 mm axle goes |
+| Internals (pistons, rods 140, camshaft 69, timing gear 53, chain 4, valves/springs) | various | Removed — makes room for the motor |
+
+To be confirmed by the user.
+
+## Decisions
+
+| #   | Decision                                                                                          | Why                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 1   | Edit with Blender, scripted (headless)                                                            | Handles glTF, can fuse, remesh, decimate and export STL                                          |
+| 2   | Print size ~10 cm long                                                                            | User's choice                                                                                    |
+| 3   | ~~Worm gear + 130 motor crosswise~~ → **N20 geared motor (~300 rpm @ 6 V), parallel to the axle** | User wanted the motor parallel; worm only works at 90°. Gearbox is built in — no worm set to buy |
+| 4   | N20 drives the axle through **one pair of printed 1:1 spur gears** (module 1, ~15T)               | Module 1 is printable; N20 output and axle are both 3 mm                                         |
+| 5   | Crank axle: 3 mm steel rod through the block — flywheel at the back, crank pulley at the front    | One axle, no extra gears                                                                         |
+| 6   | Rubber band as belt: crank pulley → fan pulley; fan pulley on its own short axle                  | Simple, cheap                                                                                    |
+| 7   | ~~Buy the small gears~~ — no longer needed with the N20                                           | Module 1 gears print fine                                                                        |
+| 8   | Reuse the existing model as the starting point                                                    | Keeps the look; only add the internal mechanism                                                  |
+| 9   | Exhaust manifold (Mesh_0, 4-into-1) **hollow**, open into the hollow block                        | Air flows from inside the engine out through the pipes                                           |
+| 10  | Add an **exhaust pipe** from the manifold outlet, down and back past the flywheel                 | Same bore as the manifold outlet                                                                 |
+
+| 11 | Exhaust pipe stops just behind the flywheel (stub) | Can be extended later |
+
+### Smoke system (idea, 2026-11-13 — open)
+
+- Oil cap: removable, push-fit (no thread). Glycerin is poured in through it.
+- 4 mm hose from the oil cap down to a **glycerin container** inside the block.
+- E-cig coil (solenoid) in the container heats the glycerin → smoke.
+- **Fan inside the engine** pulls outside air in, past the coil, and pushes smoke out through the hollow manifold and exhaust.
+- User's idea: fan driven by the crank, geared faster than the flywheel.
+- Air intake: suggested through the **air filter** on top (already a mesh).
+
+Concerns raised:
+
+- Coil runs ~200 °C+; PLA softens ~60 °C, PETG ~80 °C → heater must sit in a metal housing (e.g. a ready-made atomizer with wick), not directly in printed plastic.
+- A bare coil without a wick tends to burn the glycerin (acrid) rather than vaporise it.
+- Coil draws 2–4 A → needs a protected Li-ion cell and a switch.
+- Space at 10 cm is tight for motor + worm + tank + heater + fan → consider a bigger print.
+- A ready-made RC model smoke generator (heater + wick + fan in one unit) would replace the DIY coil and the crank-driven fan.
+
+User: print size can grow as needed. E-cig atomizer keeps heat inside its own housing — acceptable fallback.
+
+**Decision: DIY.** Ready-made units too expensive / unavailable. Use the dismantled e-cig atomizer
+(cylinder ~10 mm Ø × 20 mm) in a printed holder; design our own fan.
+Airflow: air filter (intake) → blower → atomizer → hollow manifold → exhaust stub.
+
+Blower: printed centrifugal (snail housing). Motor chosen: single-shaft N20 300 rpm (https://www.ebay.co.uk/itm/267082315931).
+**Two-stage rubber-band step-up**: crank → intermediate pulley on its own axle (~4×) → blower (~4×) = ~16×, ~4,800 rpm at full speed.
+Dual-shaft N20 (rear shaft at motor speed) was the alternative — rejected. Mount also fits a 130 motor as a fallback. Chosen for realism — more power → faster spin → more smoke flow.
+
+Controls: one speed controller for the motor, a separate one for the burner (heater power sets how much glycerin burns).
+For now battery + controllers sit **outside**; wires exit through the **bottom** of the engine. Base/compartment later.
+
+### Layout check at 150 mm (2026-11-13) — `images/engine-layout.png`
+
+Placeholder blocks inside the ghosted engine; everything fits with room to spare.
+
+- Axle on the original crank line (y 83, z 52 mm), front pulley → flywheel.
+- Worm wheel + worm + motor near the flywheel end; motor crosswise.
+- Big pulley on the crank → blower in the upper block, front half.
+- Atomizer next to the blower outlet, on the manifold side.
+- Glycerin tank in the head, under the oil cap.
+
+RC smoke unit options (rejected, kept for reference):
+
+- CHICHIYANG 1/10, metal, split air pump + control board, 7.4–11.1 V, ~£39 — https://www.amazon.co.uk/CHICHIYANG-Simulation-Generator-Generation-Accessory/dp/B0CPQ6JN61
+- MOOKEENONE 1/10, throttle-linked — https://www.amazon.co.uk/MOOKEENONE-Crawler-Generator-Simulator-Replacement/dp/B0BNDK6448
+- AD-RC set incl. smoke chamber + 30 ml oil — https://www.ebay.co.uk/itm/112666123594
+- 1/16 tank unit (smaller) — https://www.amazon.co.uk/NATEFEMIN-Simulation-Exhaust-Generator-Henglong/dp/B0C3BV16KX
+
+Manifold sizes at 10 cm: ~57 mm long, pipes ~4–5 mm across → ~2.5 mm bore with 1 mm walls.
+Bore must stay round and unsupported inside (supports can't be removed from a pipe).
+
+## Motor
+
+**Now: N20 geared motor, 6 V, ~300 rpm, 3 mm D-shaft, 12 × 10 × ~25 mm + gearbox.**
+
+- https://www.ebay.co.uk/itm/267082315931 (GA12-N20, 300 rpm @ 6 V, 3 mm × 10 mm shaft)
+- https://www.amazon.co.uk/Motor-30-3000RPM-Electric-Reduction-Motors/dp/B0DKXNB724 (choose 300 rpm)
+
+Previously considered (dropped):
+
+- 130/030-size DC motor: **25 mm long, 20 mm wide, 15 mm tall**
+- Shaft: **2 mm diameter, 7.5 mm long** (enough for a pressed-on worm)
+- Listing: https://www.ebay.co.uk/itm/397408355262
+
+## Materials to order
+
+Not verified by hand — check the bores before ordering: **worm 2 mm** (motor shaft), **wheel 3 mm** (axle).
+
+| #   | Part                                                              | Link                                                                            | Note                                       |
+| --- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------ |
+| 1   | ~~Brass worm gear set, module 0.5, 1:25~~ (dropped — N20 instead) | https://www.ebay.co.uk/p/1494496719                                             | Reportedly 2 mm worm bore, 3 mm wheel bore |
+| 2   | Brass worm gear sets, several modules/sizes (alternative)         | https://www.ebay.co.uk/itm/404552199513                                         | No 2 mm worm bore seen                     |
+| 3   | Plastic gear pack, module 0.5, 200 pcs (backup)                   | https://www.amazon.co.uk/200pcs-Plastic-Single-Reduction-Electric/dp/B08GQ85R37 | Worms fit 130 motors                       |
+| 4   | Plastic worm set for 130 motors, 11 pcs                           | https://www.amazon.co.uk/11pcs-K002B-Plastic-Motor-Parts/dp/B0F59XT6G4          | Needs a wheel from #3                      |
+| 5   | 3 mm × 100 mm stainless rod, 5-pack (crank axle, fan axle)        | https://www.amazon.co.uk/sourcing-map-Diameter-Stainless-Steel/dp/B088PBSBTJ    | File the ends                              |
+| 6   | Rubber band                                                       | —                                                                               | Belt, crank pulley → fan pulley            |
+
+## Approach
+
+1. **Identify parts** — labelled contact sheet of every mesh; confirm flywheel, fan, crank pulley, fan pulley. ← in progress
+2. **Separate moving parts** — split merged meshes; flywheel, crank pulley, fan + pulley become their own prints.
+3. **Simplify the body** — fuse the static parts into one solid (voxel remesh), drop detail finer than
+   the nozzle can print, decimate to ~200k triangles.
+4. **Hollow the block** — removable sump/lid for access; motor holder crosswise; worm/wheel clearance;
+   3 mm axle holes through front and back; fan axle hole; wire exit.
+5. **Shaft fittings** — 3 mm bores in flywheel and crank pulley; fan pulley bore for its axle; groove
+   in pulleys for the rubber band.
+6. **Export** — one STL per part, check in slicer, test-print the motor holder first.
+7. **Adjust** when the gears arrive — measure and update holder/clearances.
+
+## Open questions
+
+- Confirm which meshes are the flywheel, fan, crank pulley and fan pulley (contact sheet).
+- Exact gear dimensions once the parts arrive.
+- Power: battery type and switch location.
+
+## Version 1 — 2026-11-13
+
+Folder: `output/v1/` — `preview.png`, `engine-assembly.usdz` (open with Quick Look), `engine-v1.blend`, and one STL per part.
+
+| Part                             | File               | Notes                                                                                                                          |
+| -------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Block (body, hollow, 3 mm walls) | `block.stl`        | Axle hole Ø3.4 front→back on crank line; Ø3.0 blind hole for fan pin; oil-filler seat Ø6.5 × 6 + Ø4.2 hose hole down to cavity |
+| Sump (removable)                 | `sump.stl`         | Split at z = 36 mm; Ø8 wire hole in the floor; original floor window closed with a 3 mm plate                                  |
+| Oil cap (push-fit)               | `oil_cap.stl`      | Ø6.1 peg into the Ø6.5 seat                                                                                                    |
+| Flywheel                         | `flywheel.stl`     | Ø3.1 bore (press fit on 3 mm rod)                                                                                              |
+| Crank pulley                     | `crank_pulley.stl` | Hub added, Ø3.1 bore                                                                                                           |
+| Fan + fan pulley (one piece)     | `fan.stl`          | Ø3.4 bore (spins on a 3 mm pin)                                                                                                |
+
+Size: 150 × 133 × 165 mm. Parts exported in their assembled positions (not yet oriented for printing).
+
+Not in v1 yet: N20 motor mount + drive gears, blower + its pulleys, atomizer holder, glycerin tank,
+air intake from the air filter, hollow manifold + exhaust stub, screws/locating pins for sump, print orientation.
+Inside of the block is rough (follows the original shape) — hidden, but worth smoothing later.
+
+## How to rebuild from scratch (any session)
+
+Everything is scripted. Project folder: `~/Development/Projects/3d/Models/Engine/`
+
+- `build.sh` — one command: `./build.sh` (defaults: `source/engine-gltf.zip` → `output/latest/`) (~4 min).
+  Needs Blender ≥ 4.5 at `/Applications/Blender.app` (MANIFOLD boolean solver). Verified from scratch 2026-11-13.
+- `scripts/` — the stages, run in order by `build.sh`:
+
+| Stage | Script                                                              | What it does                                                                                                                                                                                                                                                                                                                                                     |
+| ----- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `build1.py` (+`common.py`)                                          | Import glTF, rotate 180° about X (file is upside down), scale so length = 150 mm, bake transforms; split loose pieces to pick moving parts (flywheel = Mesh_115 near axis; crank pulley = Mesh_25 + Mesh_17 hub on axis; fan = Mesh_17 + Mesh_138 on fan axis y56 z89); drop belt Mesh_3; keep crankshaft Mesh_104 aside; voxel-remesh body 0.3 mm, parts 0.2 mm |
+| 2     | `build2.py`                                                         | Delete small loose shells; close the window in the sump floor (2D hole fill, 3 mm plate at floor height); plug rear main-seal hole; voxel grid 1 mm; **outside = seen along any of 6 axis rays**; filler (solid eroded 3) unioned in; cavity = solid eroded 4 voxels (≈3 mm walls) inside core box, connected to the centre                                      |
+| 3     | `build3.py` (+`helpers.py`)                                         | Cut cavity; axle Ø3.4 along x at (y83, z52); fan pin Ø3.0 at (y56, z89); wire hole Ø8 in sump floor; oil cap (Ø17.2 cut at (90.5, 76.5), z>146) + Ø6.1 peg, seat Ø6.5 × 6, hose Ø4.2; split sump at z = 36 inside x28–146, y50–118; bores: flywheel/crank pulley Ø3.1 (crank pulley gets Ø9 hub), fan Ø3.4                                                       |
+| 4     | `build4.py`                                                         | N20 drive: motor axis 16.2 mm from axle at 210° (y 69.0, z 43.9), found by searching the cavity; sleeve 12.4 × 10.4 inner, 1.6 walls, x 75–95, open at the front, lip with Ø5 hole, web fused to the side wall; clearance pocket; two 16T module-1 involute gears, 5 mm wide, x 98.5–103.5 (axle gear Ø3.1 + hub, motor gear D-bore 3.1/2.6)                     |
+| —     | `export.py`                                                         | Drop loose bits, decimate, write STLs + `engine-assembly.usdz` + `engine.blend`                                                                                                                                                                                                                                                                                  |
+| —     | `view.py`, `explode.py`, `section.py`, `drivesec.py`, `sumpview.py` | Preview renders used to check each step                                                                                                                                                                                                                                                                                                                          |
+
+All coordinates are mm in the 150 mm model, x = front (fan) → back (flywheel), z up.
+
+## Version 2 — 2026-11-13
+
+Folder: `output/v2/` (supersedes v1 — v1's hollow missed the crankcase).
+New: proper hollow through the crankcase and sump (≈3 mm walls), N20 motor sleeve in the block,
+`gear_axle.stl` + `gear_motor.stl`, `drive-cutaway.png`.
+
+Assembly order (draft): sump off → slide motor into sleeve from the front end (wires toward the front) →
+press motor gear on → push 3 mm rod in from the back through the axle gear → flywheel on the back, crank pulley on the front.
+
+### Viewing the .blend (2026-11-13)
+The model is in mm but Blender treats 1 unit as 1 m, so the engine looked 150 m big and the view started inside it.
+`scripts/viewsetup.py` (called by `export.py`) sets units to mm (scale 0.001), frames the view on the engine
+and sets clip end 20 000. If the view is ever empty: in the 3D view press Home (View → Frame All).
+
+### Filament estimate (v2, 2026-11-13)
+Solid volumes: block 254 cm³, sump 26, flywheel 12.7, fan 6.9, crank pulley 2.1, gears 1.1 + 0.9, oil cap 1.1 → ~305 cm³.
+PLA at 1.24 g/cm³ = ~380 g if 100% solid; with normal infill (~15–20%) plus supports, roughly **250–350 g**.
+A 1 kg spool is enough, including test pieces. User has no motor and not enough filament yet (2026-11-13) — printing deferred.
+
+## Repository (2026-11-13)
+
+Lives in `github.com/marcelovani/3d` (public) under `Models/Engine/`. Not committed (see root `.gitignore`):
+`work/`, `output/` (rebuild with `./build.sh`) and `source/` — the downloaded third-party model.
+To rebuild on another machine, put the model zip at `source/engine-gltf.zip` first.

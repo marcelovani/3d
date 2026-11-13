@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Blender backups and Python caches
+*.blend1
+*.blend2
+__pycache__/
+
+# Build intermediates — rebuilt by each model's build.sh
+work/
+
+# Build outputs (large STL/USDZ/.blend files, all rebuildable with build.sh)
+output/
+
+# Downloaded source models: third-party files, check their licence before publishing
+source/
+
+# Code index
+.codegraph/
