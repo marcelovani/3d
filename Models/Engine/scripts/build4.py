@@ -39,8 +39,8 @@ def gear(name,teeth,m,width,x0,cy,cz,bore,dflat=None):
         fl=box((x0-3,cy-3,cz+dflat-bore/2),(x0+width+3,cy+3,cz+3),'flat'); boolean(h,fl,'DIFFERENCE'); O.remove(fl)
     boolean(o,h,'DIFFERENCE'); O.remove(h)
     return o
-g1=gear('gear_axle',16,1.0,5.0,GX0,AX[0],AX[1],3.1)
-hub=cyl(4,4,(GX0-2,AX[0],AX[1]),'X','hub'); h=cyl(1.55,10,(GX0-2,AX[0],AX[1]),'X','hb'); boolean(hub,h,'DIFFERENCE'); O.remove(h)
+g1=gear('gear_axle',16,1.0,5.0,GX0,AX[0],AX[1],2.0)    # starter hole
+hub=cyl(4,4,(GX0-2,AX[0],AX[1]),'X','hub'); h=cyl(1.0,10,(GX0-2,AX[0],AX[1]),'X','hb'); boolean(hub,h,'DIFFERENCE'); O.remove(h)
 boolean(g1,hub,'UNION'); O.remove(hub)
 g2=gear('gear_motor',16,1.0,5.0,GX0,MY,MZ,3.1,dflat=2.6)
 # --- clearance pocket around both gears and the motor

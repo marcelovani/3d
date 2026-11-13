@@ -59,52 +59,53 @@ log('cover split',ntri(cover))
 # ---------- 2. clearance pockets (checked against the outside)
 p1=hull([cyl(15.5,7,(58,AX[0],AX[1]),'X','a'),cyl(6,7,(58,INT[0],INT[1]),'X','b')],'belt1')
 p2=hull([cyl(13,7,(52,INT[0],INT[1]),'X','a'),cyl(6,7,(52,BLW[0],BLW[1]),'X','b')],'belt2')
-p3=cyl(14,14,(71,BLW[0],BLW[1]),'X','housingpocket')
-p4=cyl(8,30,(84,93,116),'Z','chamberpocket')
 cutcheck('belt1',[ (x,AX[0]+t*(INT[0]-AX[0])+dy,AX[1]+t*(INT[1]-AX[1])) for x in (55,58,61) for t in np.linspace(0,1,12) for dy in (-12,0,12)])
 cutcheck('belt2',[ (x,INT[0]+t*(BLW[0]-INT[0])+dy,INT[1]+t*(BLW[1]-INT[1])) for x in (49,52,55) for t in np.linspace(0,1,12) for dy in (-10,0,10)])
-cutcheck('housing',cylpts(BLW,14,64,78)); cutcheck('chamber',cylpts((84,93),8,101,126,'Z'))
-for p in (p1,p2,p3,p4): boolean(B,p,'DIFFERENCE'); O.remove(p)
-# ---------- 3. plate fused across the upper block (cavity slice dilated 2 mm so it bites into the walls)
+cutcheck('housing',cylpts(BLW,12.5,66,76)); cutcheck('chamber',cylpts((84,93),5.3,104,126,'Z'))
+for p in (p1,p2): boolean(B,p,'DIFFERENCE'); O.remove(p)
+# ---------- 3. SMOKE MODULE (separate part, assembled on the bench, lowered in from the top, screwed through the block wall)
+# plate = the cavity cross-section at x 62..65 shrunk 1 voxel (≈0.5-1 mm all round, so it drops in), z 70..SPLITZ
 i0,i1=ijk((PX0,0,0))[0],ijk((PX1,0,0))[0]
-m=np.zeros_like(cav); 
-sl=cav[i0:i1+1].copy()
-for _ in range(2):
-    d=sl.copy(); d[:,1:]|=sl[:,:-1]; d[:,:-1]|=sl[:,1:]; d[:,:,1:]|=sl[:,:,:-1]; d[:,:,:-1]|=sl[:,:,1:]; sl=d
-m[i0:i1+1]=sl
-zz=np.arange(m.shape[2])+org[2]; m[:,:,(zz<70)|(zz>SPLITZ-1)]=False     # plate only between z 70 and the cover split
-bmx=bmesh.new()
-for i,j,k in np.argwhere(m): bmesh.ops.create_cube(bmx,size=1.0,matrix=Matrix.Translation((i+org[0],j+org[1],k+org[2])))
-me=bpy.data.meshes.new('plate'); bmx.to_mesh(me); plate=O.new('plate',me); sc.collection.objects.link(plate)
-r=plate.modifiers.new('r','REMESH'); r.mode='VOXEL'; r.voxel_size=0.6; apply(plate,r)
-for c,rr,x0,x1 in ((INT,4.5,PX0,PX1+6),(BLW,4.5,PX0-4,PX1)):        # bosses
-    bo=cyl(rr,x1-x0,((x0+x1)/2,c[0],c[1]),'X','boss'); boolean(plate,bo,'UNION'); O.remove(bo)
-# belt windows through the plate are not needed (belts are on the front side)
-# ---------- 4. blower housing (scroll) on the back of the plate, open at x=76 for the lid
+m=np.zeros_like(cav); sl=cav[i0:i1+1].copy()
+e=sl.copy(); e[:,1:]&=sl[:,:-1]; e[:,:-1]&=sl[:,1:]; e[:,:,1:]&=sl[:,:,:-1]; e[:,:,:-1]&=sl[:,:,1:]
+m[i0:i1+1]=e
+zz=np.arange(m.shape[2])+org[2]; m[:,:,(zz<70)|(zz>SPLITZ-0.5)]=False
+mod=to_mesh(m,org,1.0,'smoke_module',0.6)
+for c,rr,x0,x1 in ((INT,4.5,PX0,PX1+6),(BLW,4.5,PX0-4,PX1)):        # rod bosses
+    bo=cyl(rr,x1-x0,((x0+x1)/2,c[0],c[1]),'X','boss'); boolean(mod,bo,'UNION'); O.remove(bo)
+# blower housing behind the plate, open at x=76 for the lid
 HX0,HX1=PX1,76.0; HR=12.5
-hs=cyl(HR+1.6,HX1-HX0,((HX0+HX1)/2,BLW[0],BLW[1]),'X','housing')
-boolean(plate,hs,'UNION')
-hi=cyl(HR,HX1-HX0+1,((HX0+HX1)/2+0.5+1.0,BLW[0],BLW[1]),'X','hin')   # leaves 1 mm back wall at the plate
-boolean(plate,hi,'DIFFERENCE'); O.remove(hi); O.remove(hs)
-# outlet duct housing -> atomizer chamber (box, then channel)
-du=box((70,88,119),(81,99,130),'duct'); boolean(plate,du,'UNION'); O.remove(du)
-# ---------- 5. atomizer chamber: vertical tube ID 10.6, z 103..SPLITZ, at (84,93)
-CH=(84.0,93.0)
-ch=cyl(7.0,SPLITZ-101,(CH[0],CH[1],(SPLITZ+101)/2),'Z','chamber'); boolean(plate,ch,'UNION'); O.remove(ch)
-# smoke gallery: tube along x at y=100,z=106 from x 50 to 131, joined to chamber bottom
+hs=cyl(HR+1.6,HX1-HX0,((HX0+HX1)/2,BLW[0],BLW[1]),'X','housing'); boolean(mod,hs,'UNION'); O.remove(hs)
+# atomizer chamber: vertical tube ID 10.6, z 105..SPLITZ, at (84,89) — clear of the gallery in the block
+CH=(84.0,89.0); CZ0=98.0
+ch=cyl(7.0,SPLITZ-CZ0,(CH[0],CH[1],(SPLITZ+CZ0)/2),'Z','chamber'); boolean(mod,ch,'UNION'); O.remove(ch)
+du=box((70,84,119),(80,95,SPLITZ),'duct'); boolean(mod,du,'UNION'); O.remove(du)                      # housing -> chamber
+cn=cyl(2.5,9,(CH[0]+7+3.5,CH[1],CZ0+4),'X','cnip'); boolean(mod,cn,'UNION'); O.remove(cn)               # smoke outlet nipple (+x), below the atomizer
+for c in [cyl(HR,HX1-HX0,((HX0+1+HX1)/2+0.5,BLW[0],BLW[1]),'X','housingin'),
+          cyl(5.3,SPLITZ-CZ0+2,(CH[0],CH[1],(SPLITZ+CZ0+4)/2),'Z','chin'),
+          box((71,86,121),(CH[0],93,SPLITZ-1.5),'ductin'),
+          cyl(1.5,14,(CH[0]+7+2,CH[1],CZ0+4),'X','cnipin'),
+          cyl(1.0,20,((PX0-4+PX1)/2,BLW[0],BLW[1]),'X','blowerbearing'),
+          cyl(1.0,14,(PX0+3,INT[0],INT[1]),'X','introd')]:
+    boolean(mod,c,'DIFFERENCE'); O.remove(c)
+# keep the module clear of the block: cut a 0.4 mm-grown copy of it out of the block
+cu=mod.copy(); cu.data=mod.data.copy(); sc.collection.objects.link(cu)
+d=cu.modifiers.new('grow','DISPLACE'); d.direction='NORMAL'; d.strength=0.4; d.mid_level=0; apply(cu,d)
+r=cu.modifiers.new('r','REMESH'); r.mode='VOXEL'; r.voxel_size=0.3; apply(cu,r)
+boolean(B,cu,'DIFFERENCE'); O.remove(cu)
+# 2 screw starter holes through the block side wall into the plate edge (-y side), at z 80 and 115
+for zh in (75.0,88.0):   # below the intake manifold (z >= 92)
+    hole=cyl(0.75,36,((PX0+PX1)/2,58,zh),'Y','modscrew',24)   # y 40..76
+    boolean(B,hole,'DIFFERENCE'); boolean(mod,hole,'DIFFERENCE'); O.remove(hole)
+log('smoke module',ntri(mod))
+# ---------- 4. smoke gallery in the block: tube along x at (y100,z106), inlet nipple pointing up at x 72
 GY,GZ=100.0,106.0
-ga=cyl(3.8,83,(90.5,GY,GZ),'X','gallery'); boolean(plate,ga,'UNION'); O.remove(ga)
-jn=box((80,90,102),(88,101,110),'join'); boolean(plate,jn,'UNION'); O.remove(jn)
-boolean(B,plate,'UNION'); O.remove(plate)
-# channels (cut after union)
-chs=[cyl(5.3,SPLITZ-103+5,(CH[0],CH[1],(SPLITZ+103)/2+2.5),'Z','chin'),            # chamber bore, open at top
-     box((71,90,121),(84,96,127),'ductin'),                                            # housing -> chamber
-     box((81.5,93,103.5),(86.5,101,108.5),'joinin'),                                   # chamber bottom -> gallery
-     cyl(2.25,81,(90.5,GY,GZ),'X','galin'),                                            # gallery bore (closed ends)
-     cyl(1.7,20,(BLW and (PX0-4+PX1)/2,BLW[0],BLW[1]),'X','blowerbearing'),            # blower rod bearing 3.4
-     cyl(1.5,14,(PX0+3,INT[0],INT[1]),'X','introd')]                                   # intermediate rod press 3.0
-for c in chs: boolean(B,c,'DIFFERENCE'); O.remove(c)
-log('blower/chamber/gallery done')
+ga=cyl(3.8,83,(90.5,GY,GZ),'X','gallery'); boolean(B,ga,'UNION'); O.remove(ga)
+gn=cyl(2.5,7,(72,GY,GZ+3.8+3),'Z','gnip'); boolean(B,gn,'UNION'); O.remove(gn)
+for c in [cyl(2.25,81,(90.5,GY,GZ),'X','galin'), cyl(1.5,12,(72,GY,GZ+5),'Z','gnipin')]:
+    boolean(B,c,'DIFFERENCE'); O.remove(c)
+gc=cyl(4.3,90,(90.5,GY,GZ),'X','galclear'); boolean(mod,gc,'DIFFERENCE'); O.remove(gc)   # notch the module where the gallery passes
+log('gallery done')
 # ---------- 6. hollow exhaust manifold: voxelise the closed copy, erode 1.2 mm -> channel
 from mathutils.bvhtree import BVHTree
 M=O['manifold_src']; t=BVHTree.FromObject(M,bpy.context.evaluated_depsgraph_get())
@@ -132,17 +133,18 @@ for g in groups:
     sel=near[(near[:,0]>=g.min())&(near[:,0]<=g.max())]; PORTS.append(sel.mean(0))
 log('ports',[p.round(1).tolist() for p in PORTS])
 mch=to_mesh(chan,lo+G/2,G,'manifold_channel',G*0.8)
-boolean(B,mch,'DIFFERENCE'); O.remove(mch)
+EM=O['exhaust_manifold']
+boolean(EM,mch,'DIFFERENCE'); O.remove(mch)
 # ports: gallery -> each manifold pipe start
 for p in PORTS:
     a=cyl(1.75,1,(p[0],GY,GZ),'Y','pa'); b=cyl(1.75,1,(p[0],p[1]+2,p[2]),'Y','pb')
-    h=hull([a,b],'port'); boolean(B,h,'DIFFERENCE'); O.remove(h)
+    h=hull([a,b],'port'); boolean(B,h,'DIFFERENCE'); boolean(EM,h,'DIFFERENCE'); O.remove(h)
 # ---------- 7. exhaust stub: down from the collector, then back past the flywheel
-SX,SY,SZ=OUTL; Z2=30.0; XEND=152.0
+SX,SY,SZ=OUTL; Z2=58.0; XEND=152.0   # z 58 keeps it above the sump and outside the flywheel rim
 legs=[cyl(3.5,SZ-Z2+3.5,(SX,SY,(SZ+Z2)/2-1),'Z','leg1'), cyl(3.5,XEND-SX,((SX+XEND)/2,SY,Z2),'X','leg2')]
-for l in legs: boolean(B,l,'UNION'); O.remove(l)
+for l in legs: boolean(EM,l,'UNION'); O.remove(l)
 bores=[cyl(2.0,SZ-Z2+4,(SX,SY,(SZ+Z2)/2+1),'Z','b1'), cyl(2.0,XEND-SX+4,((SX+XEND)/2+1,SY,Z2),'X','b2')]
-for b in bores: boolean(B,b,'DIFFERENCE'); O.remove(b)
+for b in bores: boolean(EM,b,'DIFFERENCE'); O.remove(b)
 # ---------- 8. air intake: down through the air filter lid, across into the cavity
 best=None
 for x in (60,64,70,76,82,88):
@@ -153,27 +155,28 @@ for x in (60,64,70,76,82,88):
 log('intake best',best)
 IX,IZ=best[1],best[2]
 for c in (cyl(2.5,170-IZ,(IX,26,(170+IZ)/2),'Z','in1'), hull([cyl(2.5,1,(IX,26,IZ),'Y','a'),cyl(2.5,1,(IX,64,IZ),'Y','b')],'in2')):
-    boolean(B,c,'DIFFERENCE'); O.remove(c)
+    for tgt in (B,O['intake_manifold'],O['air_filter']): boolean(tgt,c,'DIFFERENCE')
+    O.remove(c)
 # ---------- 9. separate moving / loose parts
-pulley('pulley_crank_inner',55.0,6.0,14.0,AX[0],AX[1],3.1)
-pi=pulley('pulley_intermediate',55.0,6.0,4.0,INT[0],INT[1],3.4)
-pb=pulley('pi_big',49.0,6.0,11.0,INT[0],INT[1],3.4); boolean(pi,pb,'UNION'); O.remove(pb)
-pulley('pulley_blower',49.0,6.0,4.0,BLW[0],BLW[1],3.1)
+pulley('pulley_crank_inner',55.0,6.0,14.0,AX[0],AX[1],2.0)
+pi=pulley('pulley_intermediate',55.0,6.0,4.0,INT[0],INT[1],2.0)
+pb=pulley('pi_big',49.0,6.0,11.0,INT[0],INT[1],2.0); boolean(pi,pb,'UNION'); O.remove(pb)
+pulley('pulley_blower',49.0,6.0,4.0,BLW[0],BLW[1],2.0)
 # impeller: back disc + 8 radial blades + hub, x 66.5..74.5, radius 11
-im=cyl(11,1.2,(67.1,BLW[0],BLW[1]),'X','impeller')
+im=cyl(11,1.2,(67.1,BLW[0],BLW[1]),'X','impeller')  # x 66.5..73.4, lid plug starts at 73.8
 for k in range(8):
     a=2*math.pi*k/8
-    bl=box((67.6,-0.6,3.5),(74.5,0.6,11),'blade')
+    bl=box((67.6,-0.6,3.5),(73.4,0.6,11),'blade')
     bl.matrix_world=Matrix.Translation((0,BLW[0],BLW[1]))@Matrix.Rotation(a,4,'X'); act(bl); bpy.ops.object.transform_apply(location=True,rotation=True)
     boolean(im,bl,'UNION'); O.remove(bl)
-hb=cyl(3.5,8,(70.5,BLW[0],BLW[1]),'X','hub'); boolean(im,hb,'UNION'); O.remove(hb)
-b=cyl(1.55,12,(70.5,BLW[0],BLW[1]),'X','b'); boolean(im,b,'DIFFERENCE'); O.remove(b)
+hb=cyl(3.5,6.8,(70.0,BLW[0],BLW[1]),'X','hub'); boolean(im,hb,'UNION'); O.remove(hb)
+b=cyl(1.0,12,(70.5,BLW[0],BLW[1]),'X','b'); boolean(im,b,'DIFFERENCE'); O.remove(b)
 # housing lid: plug into the open housing face, 9 mm inlet
-lid=cyl(HR+1.6,1.6,(HX1+0.8,BLW[0],BLW[1]),'X','blower_lid'); lp=cyl(HR-0.15,2,(HX1-1,BLW[0],BLW[1]),'X','lp'); boolean(lid,lp,'UNION'); O.remove(lp)
+lid=cyl(HR-0.15,2.0,(HX1-1.0,BLW[0],BLW[1]),'X','blower_lid')   # push-in plug x 74..76
 lh=cyl(4.5,10,(HX1,BLW[0],BLW[1]),'X','lh'); boolean(lid,lh,'DIFFERENCE'); O.remove(lh)
 # chamber cap: plug with glycerin hose nipple (4 mm hose) and a wire slot
-cap=cyl(7.0,1.6,(CH[0],CH[1],SPLITZ+0.8),'Z','chamber_cap'); pl=cyl(5.15,3,(CH[0],CH[1],SPLITZ-1.5),'Z','pl'); boolean(cap,pl,'UNION'); O.remove(pl)
-nip=cyl(1.4,6,(CH[0]-2,CH[1],SPLITZ+4.6),'Z','nip'); boolean(cap,nip,'UNION'); O.remove(nip)
+cap=cyl(7.0,1.6,(CH[0],CH[1],SPLITZ+0.8),'Z','chamber_cap'); pl=cyl(5.15,3.4,(CH[0],CH[1],SPLITZ-1.5),'Z','pl'); boolean(cap,pl,'UNION'); O.remove(pl)
+nip=cyl(1.4,6,(CH[0]-2,CH[1],SPLITZ+4.4),'Z','nip'); boolean(cap,nip,'UNION'); O.remove(nip)
 nb=cyl(0.8,20,(CH[0]-2,CH[1],SPLITZ),'Z','nb'); boolean(cap,nb,'DIFFERENCE'); O.remove(nb)
 ws=box((CH[0]+1.5,CH[1]-1.5,SPLITZ-5),(CH[0]+4.0,CH[1]+1.5,SPLITZ+3),'ws'); boolean(cap,ws,'DIFFERENCE'); O.remove(ws)
 O.remove(M)

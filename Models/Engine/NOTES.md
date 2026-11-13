@@ -219,3 +219,59 @@ Icosa Gallery page https://icosa.gallery/view/59QBP8GiT0q: "Internal Combustion 
 from Sketchfab, uploaded by Devin Marble, **CC BY 3.0**. Sharing and changing allowed with credit, licence link
 and a note of changes → `source/engine-gltf.zip` is committed with `source/ATTRIBUTION.md`. The 86 MB `.usdz`
 copy is not committed (unused, near GitHub's 100 MB limit).
+
+## Version 3 — smoke system and separate parts (2026-11-13)
+
+### Decisions (user, 2026-11-13)
+| # | Decision | Why |
+|---|----------|-----|
+| 12 | Add-on parts printed separately: exhaust manifold, intake manifold + carburettor, air filter, alternator, oil filter (plus sump, rocker cover, oil cap, flywheel, fan, pulleys, gears) | Easier to print and assemble; **each can be a different PLA colour** |
+| 13 | Parts joined with small screws: **1.5 mm starter holes**, user drills/screws | No tight printed fits needed |
+| 14 | Rods: **2 mm starter holes** in pulleys, flywheel, fan, gears, plate bosses — user drills to the rod size. Exception: the long crank axle hole through the block stays full size (Ø3.4) so it runs straight; the motor gear keeps its exact D-bore | User has metal rods and drills |
+| 15 | Removable **rocker cover** (split z = 127) | Top access to blower, atomizer, tank, hose |
+
+### Smoke system layout (`scripts/build5.py`)
+- **Smoke module** = one separate part (purple in `images/v3-exploded.png`): plate + rod bosses + blower housing + duct + atomizer
+  chamber. Assemble on the bench (impeller, lid plug, atomizer), lower in from the top with the rocker cover off, fix with
+  2 screws through the block's -y wall at z 75 and 88 (x 63.5). The block gets a 0.4 mm clearance around it.
+  (First try had it fused into the block — the impeller could not be fitted, so it was split out.)
+- **Plate**: cavity cross-section at x 62–65 shrunk ~1 voxel so it drops in, z 70–127.
+- **Belts** on the front side of the plate: crank inner pulley Ø28 (x 55–61, on the axle) → intermediate small Ø8;
+  intermediate big Ø22 (x 49–55) → blower pulley Ø8. Ratio ≈ 3.5 × 2.75 ≈ 9.6 → ~2,900 rpm blower at 300 rpm crank.
+  Intermediate rod at (y 84, z 85), blower rod at (y 80, z 118).
+- **Blower**: scroll housing Ø25 inside, x 65–76 behind the plate, open at the back for the **blower_lid** (Ø9 inlet);
+  **impeller** Ø22, 8 blades.
+- **Blower lid**: push-in plug (no flange) x 74–76 with a Ø9 inlet; impeller blades end at x 73.4.
+- **Atomizer chamber**: vertical tube ID 10.6 at (x 84, y 89), z 98–127, open at the top under the rocker cover; **chamber_cap**
+  has a nipple for the glycerin hose (from the oil-cap filler) and a wire slot. Air enters at the top (duct from the housing,
+  z 121–125.5), passes through the atomizer, leaves by the **outlet nipple** at the bottom (z 102, pointing +x).
+- **Smoke gallery** (in the block): tube ID 4.5 along x at (y 100, z 106), x 49–132, with an **inlet nipple** pointing up at x 72.
+  Join the chamber outlet nipple to it with a short piece of the 4 mm hose. Drilled into each of the 4 exhaust ports
+  (found from the manifold channel: x 55, 79, 103, 127; y 104; z 110). The module is notched where the gallery passes.
+- **Exhaust manifold** (separate part): hollowed by voxel erosion (0.4 mm grid, 1.2 mm walls) of the original Mesh_0;
+  **exhaust stub** Ø7/Ø4 from the collector outlet (≈ x 95, y 120, z 74) down to z 58, then straight back to x 152
+  (first try went down to z 30 and ran through the sump).
+- **Air intake**: Ø5 hole down through the air filter, carburettor and intake into the head (path found by search, x 88, z 110).
+
+### Add-on part boxes (`scripts/build1.py`, islands fully inside go to the part)
+air_filter (46,-4,138)–(110,57,172) · intake_manifold (38,-4,92)–(134,63,150) · alternator (12,18,36)–(58,60,90) ·
+oil_filter (8,93,6)–(52,134,82) · exhaust_manifold (33,101,60)–(137,142,130).
+
+### Stage 1 change: add-ons cut out of the fused block
+Fusing the block alone (without the add-ons) dropped whole walls, because the voxel fuse leaks through the open ports.
+So the block is fused **with** the add-ons and each add-on is then cut out grown by 0.4 mm (also the fitting gap).
+Stage 2 counts the add-ons as walls for the inside/outside test but keeps the filler out of them.
+Stage 3 cuts 0.5 mm clearance around flywheel, crank pulley and fan; stage 6 re-cuts 0.3 mm around the add-ons.
+
+### Checks
+- `scripts/overlap.py` lists parts whose surfaces intersect. v3 final: only faces meant to touch (sump/cover split faces,
+  oil cap and chamber cap seats, the two gears).
+- `scripts/explode.py` renders the coloured exploded view.
+
+### Screw starter holes (`scripts/build6.py`)
+Sump 4, rocker cover 4 (vertical, in solid wall), exhaust 2, intake 2, oil filter 2, air filter → intake 2, smoke module 2.
+Alternator: the holes did not reach into the alternator body (log warning) — drill those by hand when fitting.
+
+### Known issues
+- Some recesses on the block sides are filled flat (filler shows through where the original surface was open). Cosmetic.
+- Wall check near the atomizer chamber flagged a few points closer than 2 mm to the outside (v3 first try) — pockets removed.

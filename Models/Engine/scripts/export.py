@@ -2,7 +2,7 @@ import bpy, bmesh, sys, os
 import numpy as np
 sys.path.insert(0,sys.argv[-2]); from helpers import *
 OUT=os.path.expanduser(sys.argv[-1]); os.makedirs(OUT,exist_ok=True)
-targets={'block':1300000,'sump':400000,'flywheel':300000,'fan':200000,'crank_pulley':100000,'oil_cap':40000,'gear_axle':50000,'gear_motor':50000,'rocker_cover':300000,'pulley_crank_inner':20000,'pulley_intermediate':20000,'pulley_blower':10000,'impeller':20000,'blower_lid':10000,'chamber_cap':10000}
+targets={'block':1300000,'sump':400000,'flywheel':300000,'fan':200000,'crank_pulley':100000,'oil_cap':40000,'gear_axle':50000,'gear_motor':50000,'rocker_cover':300000,'pulley_crank_inner':20000,'pulley_intermediate':20000,'pulley_blower':10000,'impeller':20000,'blower_lid':10000,'chamber_cap':10000,'exhaust_manifold':250000,'intake_manifold':300000,'air_filter':250000,'alternator':150000,'oil_filter':100000,'smoke_module':150000}
 for n,t in targets.items():
     o=O[n]
     bm=bmesh.new(); bm.from_mesh(o.data); bm.verts.ensure_lookup_table()

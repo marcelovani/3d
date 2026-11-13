@@ -75,10 +75,21 @@ def dil(a):
     r[1:]|=a[:-1]; r[:-1]|=a[1:]; r[:,1:]|=a[:,:-1]; r[:,:-1]|=a[:,1:]; r[:,:,1:]|=a[:,:,:-1]; r[:,:,:-1]|=a[:,:,1:]
     return r
 co=np.empty(len(B.data.vertices)*3); B.data.vertices.foreach_get('co',co); co=co.reshape(-1,3)
+for n in ('air_filter','intake_manifold','alternator','oil_filter','exhaust_manifold','crank'):
+    if n in O:
+        av=np.empty(len(O[n].data.vertices)*3); O[n].data.vertices.foreach_get('co',av); co=np.vstack([co,av.reshape(-1,3)])
 org=np.array([-3,-3,-3.0]); dims=np.ceil((co.max(0)-org+3)/G).astype(int)+1
 surf=np.zeros(dims,bool); idx=((co-org)/G).astype(int); surf[idx[:,0],idx[:,1],idx[:,2]]=True
 cc=np.empty(len(O['crank'].data.vertices)*3); O['crank'].data.vertices.foreach_get('co',cc); cc=cc.reshape(-1,3)
 ci=np.clip(((cc-org)/G).astype(int),0,dims-1); surf[ci[:,0],ci[:,1],ci[:,2]]=True
+# add-on parts (printed separately) still close their openings for the inside/outside test
+ADDONS=('air_filter','intake_manifold','alternator','oil_filter','exhaust_manifold')
+acc=np.zeros(dims,bool)
+for n in ADDONS:
+    if n not in O: continue
+    av=np.empty(len(O[n].data.vertices)*3); O[n].data.vertices.foreach_get('co',av); av=av.reshape(-1,3)
+    ai=np.clip(((av-org)/G).astype(int),0,dims-1); acc[ai[:,0],ai[:,1],ai[:,2]]=True
+surf|=acc
 surfc1=dil(surf)
 def _dil_placeholder(a):
     r=a.copy()
@@ -117,7 +128,13 @@ def to_mesh(mask,name,radius):
     md=o.modifiers.new('gn','NODES'); md.node_group=ng; apply(o,md)
     return o
 # 3. filler: solid eroded 1 voxel, unioned in so the inside becomes solid
-filler=to_mesh(erode(solid,3),'filler',G*0.75)
+# volume of the add-ons alone (6-direction test on their own surface), grown 1 voxel
+asurf=dil(acc); aext=np.zeros(dims,bool)
+for ax in range(3):
+    aext|=~np.logical_or.accumulate(asurf,axis=ax)
+    aext|=np.flip(~np.logical_or.accumulate(np.flip(asurf,axis=ax),axis=ax),axis=ax)
+accsolid=dil(~aext)
+filler=to_mesh(erode(solid,3)&~accsolid,'filler',G*0.75)
 log('filler tris',ntri(filler))
 boolean(B,filler,'UNION'); O.remove(filler)
 log('filled',ntri(B))
@@ -128,6 +145,7 @@ core=np.zeros(dims,bool)
 def ix(x,y,z): return tuple(int((v-o)/G) for v,o in zip((x,y,z),org))
 a=ix(30,48,3); b=ix(138,118,148); core[a[0]:b[0],a[1]:b[1],a[2]:b[2]]=True
 cav&=core
+cav&=~dil(dil(dil(accsolid)))
 pts=np.argwhere(cav)
 if len(pts)==0: raise SystemExit('no cavity')
 c=np.array(ix(85,83,80)); s=tuple(pts[np.argmin(((pts-c)**2).sum(1))])

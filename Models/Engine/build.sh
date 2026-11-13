@@ -15,5 +15,6 @@ $BL -b "$WORK/stage1.blend" -P "$SC/build2.py" -- "$WORK/stage2.blend"          
 $BL -b "$WORK/stage2.blend" -P "$SC/build3.py" -- "$SC" "$WORK/stage3.blend"       # cut cavity + holes, split sump and oil cap
 $BL -b "$WORK/stage3.blend" -P "$SC/build4.py" -- "$SC" "$WORK/stage4.blend"       # N20 sleeve + gears
 $BL -b "$WORK/stage4.blend" -P "$SC/build5.py" -- "$SC" "$WORK" "$WORK/stage5.blend"       # smoke system, rocker cover, manifold, exhaust, intake
-$BL -b "$WORK/stage5.blend" -P "$SC/export.py" -- "$SC" "$OUT"                    # clean, decimate, STLs + USDZ + .blend
+$BL -b "$WORK/stage5.blend" -P "$SC/build6.py" -- "$SC" "$WORK" "$WORK/stage6.blend"       # screw starter holes
+$BL -b "$WORK/stage6.blend" -P "$SC/export.py" -- "$SC" "$OUT"                    # clean, decimate, STLs + USDZ + .blend
 echo "Done: $OUT"
