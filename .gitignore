@@ -12,8 +12,9 @@ work/
 # Build outputs (large STL/USDZ/.blend files, all rebuildable with build.sh)
 output/
 
-# Downloaded source models: third-party files, check their licence before publishing
-source/
+# Downloaded source models: keep only files whose licence allows sharing (see each model's source/ATTRIBUTION.md).
+# Engine: CC BY 3.0 — the glTF zip is committed; the .usdz copy (86 MB, unused) is not.
+**/source/*.usdz
 
 # Code index
 .codegraph/

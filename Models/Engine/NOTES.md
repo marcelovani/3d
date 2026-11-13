@@ -212,5 +212,10 @@ A 1 kg spool is enough, including test pieces. User has no motor and not enough 
 ## Repository (2026-11-13)
 
 Lives in `github.com/marcelovani/3d` (public) under `Models/Engine/`. Not committed (see root `.gitignore`):
-`work/`, `output/` (rebuild with `./build.sh`) and `source/` — the downloaded third-party model.
-To rebuild on another machine, put the model zip at `source/engine-gltf.zip` first.
+`work/` and `output/` (rebuild with `./build.sh`). `source/engine-gltf.zip` is committed (CC BY 3.0, see below).
+
+### Source licence (checked 2026-11-13)
+Icosa Gallery page https://icosa.gallery/view/59QBP8GiT0q: "Internal Combustion Engine", by T-FLEX CAD ST (Free)
+from Sketchfab, uploaded by Devin Marble, **CC BY 3.0**. Sharing and changing allowed with credit, licence link
+and a note of changes → `source/engine-gltf.zip` is committed with `source/ATTRIBUTION.md`. The 86 MB `.usdz`
+copy is not committed (unused, near GitHub's 100 MB limit).
