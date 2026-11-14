@@ -275,3 +275,37 @@ Alternator: the holes did not reach into the alternator body (log warning) — d
 ### Known issues
 - Some recesses on the block sides are filled flat (filler shows through where the original surface was open). Cosmetic.
 - Wall check near the atomizer chamber flagged a few points closer than 2 mm to the outside (v3 first try) — pockets removed.
+
+## Version 4: clean parts from the original (2026-11-13)
+
+**Why:** the v3 STLs had holes and missing pieces. Three causes: the original is a display model
+made of open surfaces; the v3 voxel remesh at 0.25–0.3 mm lost thin details; and the boolean
+cuts plus decimation opened gaps. Decision: take each part straight from the original, make it
+solid on its own, and work out the joins (axle, gears, screws, smoke system) later.
+
+**How** (`scripts/v4/extract.py`, no booleans, no decimate):
+1. Select the parts with the same boxes as v3 `build1.py`. The block is everything else; the belt (M3) is dropped.
+2. Sample each part's surface into a voxel grid: 0.1–0.12 mm for small parts, 0.25 mm for the block.
+3. Solid = every voxel that can't be seen from outside along any of the 6 axis directions.
+4. Mesh it with OpenVDB (`convertToPolygons`, after a light 1-2-1 blur). The result is watertight by construction.
+5. Drop loose pieces under 5% of the biggest (floating bolts, wires).
+6. Block: fill it using every part's surface, so openings hidden behind the add-ons stay closed. Then remove each add-on and moving part from it, in voxel space.
+
+**Run** (about 11 min; output/v4 is git-ignored):
+```
+cd Models/Engine
+/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/v4/extract.py -- scripts work/src/scene.gltf output/v4 [part ...]
+/Applications/Blender.app/Contents/MacOS/Blender -b output/v4/engine-parts.blend -P scripts/v4/partviews.py -- output/v4/views
+```
+`work/src/scene.gltf` is unzipped from `source/engine-gltf.zip`, the same as stage 1 of build.sh.
+
+**Parts:** block, flywheel, crank_pulley, fan, air_filter, intake_manifold, alternator, oil_filter, exhaust_manifold.
+
+**Known issues:**
+- Islands centred in an add-on box that stick out by no more than 15 mm now go to that add-on, which moved most of the carburettor off the block. One small bracket is still on top of the block.
+- A few hundred to about 1,500 non-manifold edges on the block, air filter, intake and alternator, where two surfaces touch. Slicers usually repair these.
+- Rocker cover and sump are still part of the block; they'll be split when we design the joins.
+
+**Status (2026-11-14): parked.** v4 is better than v3 but still not good enough: Cura shows lots of
+orphan edges. Next: Marcelo will simplify the source model himself, then we try again with a
+simpler approach on the simplified source.
