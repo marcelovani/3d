@@ -497,3 +497,31 @@ replaced by this.
 **In git (2026-11-21):** `source/engine-simplified.blend` (Marcelo's hand-simplified source, 65 MB) and
 `source/alternator-shaft.blend` are committed. `source/engine-parts.blend` and `.obj` are git-ignored:
 `prepare.py` rebuilds them, and the .obj is 181 MB, over GitHub's 100 MB file limit.
+
+### v5 step 8: pulleys fit their pins (2026-11-21)
+
+Marcelo approved: cut the fits at scan time, with a 0.3 mm gap. `scripts/v5/fit.py` runs after the
+scans; `run.sh` calls it automatically. For each (pulley, host) in `FITS`, currently `alternator_pulley`
+on `block` and `crank_pulley` on `block`:
+1. It finds the pulley's axis (its thinnest direction) and which end is the front: the back is the end
+   where the host's own body (3.5 to 8 mm from the axis) is.
+2. It measures the pin over the first 2.5 mm from its tip, because further back the host itself
+   reaches into the pulley's length.
+   - Alternator pin: radius 2.40 mm. Crank pin: radius 2.43 mm. Both are as scanned, thickened from
+     1.95 and 1.83.
+3. It opens the pulley's hole to the pin radius + 0.3 mm (`BORE_GAP`). The holes were 1.61 and 2.40.
+4. It grows the pulley by 0.25 mm (`FACE_GAP`), using an OpenVDB level set of the closed mesh meshed
+   at +0.25, and cuts that out of the host with the Manifold boolean. 0.25 is a little under 0.3, so the
+   grown pulley never touches the pin's surface.
+5. It checks the shared volume of pulley and host, from a Manifold INTERSECT. Both now share 0.000 mm³,
+   and all three meshes have 0 non-manifold edges. Rerunning changes nothing.
+
+Picture: `images/v5-alternator-pulley-fit.png`, a section through the alternator axis showing the pin
+inside the opened pulley hole and the pocket in the alternator front.
+
+Two traps found on the way:
+- An STL keeps every triangle on its own. Welding it back merges surfaces that only touch (1,631
+  edges with three or more faces), and the Manifold boolean then refuses the mesh. `scan.py` now also
+  writes `<part>.blend` with the real topology, and `fit.py` works on those.
+- A nearest-face inside/outside test is fooled at sharp corners: it reported thousands of buried
+  vertices where the real shared volume was 0. Use INTERSECT volume instead.

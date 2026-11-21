@@ -190,6 +190,7 @@ for name, T in sorted(TR.items(), key=lambda kv: -len(kv[1])):
     o = to_mesh(holder, org, G, name)
     bpy.ops.object.select_all(action='DESELECT'); o.select_set(True); bpy.context.view_layer.objects.active = o
     bpy.ops.wm.stl_export(filepath=os.path.join(OUT, name + '.stl'), export_selected_objects=True)
+    bpy.data.libraries.write(os.path.join(OUT, name + '.blend'), {o}, fake_user=True)   # keeps the topology STL loses (fit.py)
     bpy.data.objects.remove(o)                         # free before the next piece
 
 log('done')

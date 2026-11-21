@@ -25,6 +25,8 @@ for n in $NAMES; do
   done
   echo "$n peak $((PEAK/1024)) MB $(grep "LOG [0-9]* $n G" "$OUT/log.txt" | tail -1 | cut -d' ' -f6-)"
 done
+# make parts that sit on each other fit (pulley holes opened to their pins, pockets cut for them)
+$B -b -P scripts/v5/fit.py -- "$OUT" 2>&1 | grep -E "^FIT|Error"
 # one .blend with every piece, for the contact sheet and for viewing
 $B -b --python-expr "import bpy, glob, os
 bpy.ops.wm.read_factory_settings(use_empty=True)
