@@ -13,11 +13,14 @@ argv = sys.argv[sys.argv.index('--') + 1:]
 SRC, OUT = argv[:2]
 ONLY = set(argv[2:])
 import bpy, bmesh, numpy as np, openvdb as vdb
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import shape as shaping                          # per-part reshaping before meshing (shape.py)
 
 LENGTH = 150.0      # mm, fan to flywheel (x)
 ROTS = 12           # extra scan rotations, 6 directions each
 MIN_WALL = 0.6      # mm, thinnest wall after thickening
 KEEP = 0.01         # drop loose pieces smaller than this share of the biggest one
+MIN_PIECE = 5.0     # mm3, and loose pieces smaller than this (a 0.5 mm3 speck floated inside the oil cap)
 ADAPT = 0.1          # OpenVDB adaptivity: merges flat areas into bigger triangles (0 = none)
 T0 = time.time()
 def log(*a): print('LOG', round(time.time() - T0), *a, flush=True)
@@ -38,17 +41,21 @@ lo = allv.min(0); k = LENGTH / (allv[:, 0].max() - lo[0])
 for n in TR: TR[n] = (TR[n] - lo) * k                       # mm, min corner at 0, orientation kept
 log('pieces', len(TR), 'scale', round(float(k), 3))
 
-def sample(T, step):
+def sample(T, step, max_pts=4_000_000):
+    """Points on the triangles, at most step apart, yielded in blocks of at most max_pts: a few big
+    triangles at a fine step make tens of millions of points (the air filter's lid went over 4 GB)."""
     e = np.maximum.reduce([np.linalg.norm(T[:, i] - T[:, (i + 1) % 3], axis=1) for i in range(3)])
     n = np.maximum(1, np.ceil(e / step)).astype(int)
-    out = [T.mean(1)]
+    yield T.mean(1)
     for m in np.unique(n):
         sel = T[n == m]
         i, j = np.meshgrid(np.arange(m + 1), np.arange(m + 1), indexing='ij'); ok = i + j <= m
         u = (i[ok] / m).astype(np.float32); w = (j[ok] / m).astype(np.float32)
-        out.append((sel[:, None, 0] * (1 - u - w)[None, :, None] + sel[:, None, 1] * u[None, :, None]
-                    + sel[:, None, 2] * w[None, :, None]).reshape(-1, 3))
-    return np.concatenate(out)
+        k = max(1, max_pts // len(u))
+        for a in range(0, len(sel), k):
+            s_ = sel[a:a + k]
+            yield (s_[:, None, 0] * (1 - u - w)[None, :, None] + s_[:, None, 1] * u[None, :, None]
+                   + s_[:, None, 2] * w[None, :, None]).reshape(-1, 3)
 
 def voxelize(P, org, G, shape):
     S = np.zeros(shape, bool)
@@ -93,7 +100,7 @@ def dilate_cube(A):
         A = B
     return A
 
-MAX_VOXELS = 250e6   # memory guard for the rotated grids (bool: 1 byte per voxel)
+MAX_VOXELS = float(os.environ.get('MAX_VOXELS', 250e6))   # memory guard for the rotated grids (bool: 1 byte per voxel)
 
 def scan(T, G):
     flat = T.reshape(-1, 3); lo_, hi_ = flat.min(0), flat.max(0)
@@ -102,9 +109,10 @@ def scan(T, G):
     org = lo_ - pad * G; shape = tuple(np.ceil((hi_ - org) / G).astype(int) + pad)
     S = np.zeros(shape, bool); npts = 0
     for i in range(0, len(T), 20000):            # sample in chunks: never hold every point at once
-        P = sample(T[i:i + 20000], G / 2); npts += len(P)
-        idx = np.floor((P - org) / G).astype(np.int32)
-        S[idx[:, 0], idx[:, 1], idx[:, 2]] = True
+        for P in sample(T[i:i + 20000], G / 2):
+            npts += len(P)
+            idx = np.floor((P - org) / G).astype(np.int32)
+            S[idx[:, 0], idx[:, 1], idx[:, 2]] = True
     out = seen(dilate(S, 1))                     # dilate 1 so rays can't slip through gaps between samples
     V = org + (np.argwhere(S).astype(np.float32) + 0.5) * G   # surface voxel centres stand in for the points
     c = ((lo_ + hi_) / 2).astype(np.float32)
@@ -167,7 +175,8 @@ def to_mesh(holder, org, G, name):
                     if y.index not in seen_f: seen_f.add(y.index); st.append(y)
         isl.append(grp)
     big = max(len(i) for i in isl)
-    small = [i for i in isl if len(i) < big * KEEP]
+    vol = lambda g: sum(f.calc_center_median().dot(f.normal) * f.calc_area() for f in g) / 3
+    small = [i for i in isl if len(i) < big * KEEP or (len(i) < big and vol(i) < MIN_PIECE)]
     bmesh.ops.delete(bm, geom=[f for i in small for f in i], context='FACES')
     nm_e = sum(1 for e in bm.edges if not e.is_manifold)
     nm_v = sum(1 for v in bm.verts if not v.is_manifold)
@@ -186,6 +195,16 @@ for name, T in sorted(TR.items(), key=lambda kv: -len(kv[1])):
     size = (T.reshape(-1, 3).max(0) - T.reshape(-1, 3).min(0)).max()
     G = float(np.clip(size / 450, 0.08, 0.25))
     M, org, G = scan(T, G)
+    if name in shaping.SHAPES:
+        def surface(T2, org=org, G=G, sh=M.shape):
+            """surface voxels of another part's triangles, in this grid"""
+            Sv = np.zeros(sh, bool)
+            for i in range(0, len(T2), 20000):
+                for P in sample(T2[i:i + 20000], G / 2):
+                    idx = np.floor((P - org) / G).astype(np.int32)
+                    idx = idx[np.all((idx >= 0) & (idx < sh), 1)]; Sv[idx[:, 0], idx[:, 1], idx[:, 2]] = True
+            return Sv
+        M = shaping.SHAPES[name](M, org, G, TR, surface)
     holder = [M]; del M
     o = to_mesh(holder, org, G, name)
     bpy.ops.object.select_all(action='DESELECT'); o.select_set(True); bpy.context.view_layer.objects.active = o

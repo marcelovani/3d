@@ -27,9 +27,6 @@ for n in $NAMES; do
 done
 # make parts that sit on each other fit (pulley holes opened to their pins, pockets cut for them)
 $B -b -P scripts/v5/fit.py -- "$OUT" 2>&1 | grep -E "^FIT|Error"
-# one .blend with every piece, for the contact sheet and for viewing
-$B -b --python-expr "import bpy, glob, os
-bpy.ops.wm.read_factory_settings(use_empty=True)
-for f in sorted(glob.glob('$OUT/*.stl')): bpy.ops.wm.stl_import(filepath=f)
-bpy.ops.wm.save_as_mainfile(filepath='$OUT/scan.blend')" > /dev/null 2>&1
-$B -b "$OUT/scan.blend" -P scripts/v5/sheet.py -- "$OUT/contact-sheet.png" 4 2>&1 | grep -E "SHEET|Error"
+# every part together in its print colour: engine.blend, and one STL per colour (engine-<colour>.stl)
+$B -b -P scripts/v5/assemble.py -- "$OUT" 2>&1 | grep -E "^ASSEMBLE|Error"
+$B -b "$OUT/engine.blend" -P scripts/v5/sheet.py -- "$OUT/contact-sheet.png" 4 2>&1 | grep -E "SHEET|Error"

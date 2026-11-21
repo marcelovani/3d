@@ -392,6 +392,8 @@ with bpy.data.libraries.load(os.path.join(os.path.dirname(SRC), 'alternator-shaf
 for ob in dst_.objects: bpy.context.scene.collection.objects.link(ob)
 if not os.environ.get('SKIP_SHAFT'): attach_all('alternator_shaft', 'block')
 for o in O: o.data.name = o.name
+# print colours (Marcelo 2026-11-21), so the parts show in their colours when the file is opened
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import colours; colours.apply(O)
 bpy.ops.wm.save_as_mainfile(filepath=OUT)
 bpy.ops.wm.obj_export(filepath=os.path.splitext(OUT)[0] + '.obj', export_materials=False)
 print('PARTS', len([o for o in O if o.type == 'MESH']), flush=True)

@@ -525,3 +525,76 @@ Two traps found on the way:
   writes `<part>.blend` with the real topology, and `fit.py` works on those.
 - A nearest-face inside/outside test is fooled at sharp corners: it reported thousands of buried
   vertices where the real shared volume was 0. Use INTERSECT volume instead.
+
+### v5 step 9: block weight, plain crankcase inside, alternator filled (2026-11-21)
+
+Marcelo sliced the scanned block in Cura (Ender 3 Pro, Low 0.28 mm, supports on): 218 g and a day.
+With tree supports it was 183 g. An estimate from the mesh (2 walls, 4 top and bottom layers, 20% infill,
+supports below anything steeper than 35°) put the 181 g as about 72 g walls, 45 g top and bottom
+layers, 54 g supports and only 10 g infill. So the weight is surface, not thick walls. The block was
+already hollow, and 40% of its surface was hidden once the head and sump are on. Filling the crankcase
+solid would weigh more: 20% infill of 265 cm³ is more than the walls it replaces.
+
+Decisions (Marcelo): fill the alternator solid, and give the crankcase a plain inside.
+
+`scripts/v5/shape.py` reshapes a part in voxel space after the scan and before meshing. `scan.py` calls it
+for the parts in `SHAPES`, which is only `block` for now. For the block:
+1. Find the crankcase inside. In each horizontal slice between the sump top and the head bottom, take
+   the space enclosed by the block plus the surfaces of all the other parts. Bridge openings under 4 mm
+   (`GAP_CLOSE` 2 mm). The flywheel counts as a solid disc, because its hub hole leads through the rear
+   crank hole into the crankcase. Keep the 3D piece around the crank axis: 265 cm³.
+2. Remove material that is within 6 mm of that inside (`REACH`, which takes webs and ribs up to 12 mm
+   thick) and more than 2 mm from the outside (`WALL`, measured across each slice). Keep only what is in
+   one piece with the inside, so no sealed hole is left. The pulley pins are never touched (8 mm round
+   their axes, 15 mm deep).
+3. Remove the deck too (Marcelo: "should be hollow inside the block but it is covered"). The deck is the
+   plate with the 4 bores that the head sits on. The crankcase's outline from its top 5 mm (`TOP_SPAN`)
+   carries on up through the deck, and the deck's holes inside it count as inside. The block is now open
+   at the top like a box, with a 2 mm rim for the head. Picture: `images/v5-block-open-top.png`.
+4. No ceilings inside. Built from the top down, each slice's hollow is cut back to what is empty in the
+   slice above it, plus one voxel every second slice (about 27°). Going up, the hollow only stays the
+   same or widens. Without this the inside followed the outside's flanges and made ledges, and supports
+   went up instead of down. First version bug: it started from the deck, so the crankcase under it was
+   filled almost solid (134 → 184 cm³) and Cura showed 182 g against 183.
+5. Reconnect anything the hollowing cut off. The test uses the same blur the mesher uses, because a
+   one-voxel bridge vanishes there.
+6. Fill the alternator. Its can runs from x 21.0 to 47.3 mm, found as full turns of wall behind the
+   pulley, with an inner radius of 13.3 mm. Everything inside that radius is filled (+12.4 cm³). The vents
+   become shallow recesses.
+7. Fill sealed holes. Filling the crankcase closed off small pockets behind the rear wall (0.76 cm³).
+   They had shown up as a second shell in the mesh.
+
+Result: 1 piece, 0 non-manifold edges, 786k triangles, both pins intact, volume 137 cm³. The estimate
+went from 181 to 167 g with normal supports. Support space inside the crankcase went from 100 to 56 cm³.
+Surface went from 899 to 891 cm². A hollow box this size still needs about 214 cm² of inside wall, so
+little more can come from the inside. The previous scan is kept in `output/v5-prev/` for comparison.
+
+### v5 step 10: every part scanned, coloured, assembled (2026-11-21)
+
+Marcelo: the open-top block is OK (Cura 175 g with tree supports). Scan all the parts, and give one .blend
+and STLs separated by colour. Colours, by the numbers in `images/v5-parts.png`: black 1 oil cap, 3 rocker
+cover, 6 exhaust manifold, 8 alternator pulley, 10 crank pulley, 11 flywheel; red 2 air filter, 7 fan,
+12 sump; grey the rest (intake manifold, head, block). They live in `scripts/v5/colours.py`.
+
+- `scripts/v5/run.sh output/v5` scanned the 11 parts left (the block was kept). Every part is 1 piece
+  with 0 non-manifold edges. Peak memory was 1.0 to 3.7 GB.
+- The air filter was killed at 4 GB. Its lid has a few huge triangles, and sampling them at 0.06 mm made
+  tens of millions of points at once. `sample()` now yields blocks of at most 4M points, and the air
+  filter peaks at 2.1 GB. `MAX_VOXELS` can be set from the environment, but this didn't need it.
+- `fit.py` picked the wrong end of the crank pulley as its front once the block was reshaped. It
+  measured the plug (4.48 mm) instead of the pin and opened the hole to 4.78. The front is now the end
+  farther from the host's middle. After rescanning the pulley: pin 2.43 mm, hole 2.73 mm. The alternator
+  pulley has pin 2.40 mm and hole 2.70 mm. Both share 0.000 mm³ with the block.
+- The oil cap had a 0.5 mm³ speck floating inside it, just over the 1% cut. `scan.py` now also drops
+  loose pieces under 5 mm³ (`MIN_PIECE`).
+- `scripts/v5/assemble.py` (run by `run.sh`) loads each `<part>.blend`, colours the parts and saves
+  `output/v5/engine.blend`, with a collection per colour and mm units. It also writes one STL per colour:
+  `engine-black.stl`, `engine-red.stl` and `engine-grey.stl`. An STL can't hold a colour. The contact
+  sheet is now rendered from `engine.blend`. `scan.blend` is gone.
+- `prepare.py` applies the colours too, and `source/engine-parts.blend` was coloured in place with
+  `blender -b source/engine-parts.blend -P scripts/v5/colours.py`.
+
+Picture: `images/v5-engine-colours.png`.
+
+Postponed (Marcelo): check every touching pair for overlap, since the scan thickens surfaces, and give the
+flywheel and fan clearance to spin.

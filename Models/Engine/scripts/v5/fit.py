@@ -68,12 +68,11 @@ for pul, host in FITS:
     P, H = cache[pul], cache[host]
     pv = verts(P); lo, hi = pv.min(0), pv.max(0); ax = int(np.argmin(hi - lo)); q = [i for i in range(3) if i != ax]
     c = (lo + hi) / 2
-    # which end is the front (away from the host)? the back is where the host's own body is: host material
-    # off the pin (3.5-8 mm from the axis) near that end
+    # which end is the front (away from the host)? the end farther from the host's middle. (Counting host
+    # material near each end picked the wrong end once the block's inside was reshaped.)
     hv = verts(H); rr = np.hypot(hv[:, q[0]] - c[q[0]], hv[:, q[1]] - c[q[1]])
-    L = hi[ax] - lo[ax]; body = (rr > 3.5) & (rr < 8)
-    near_lo = np.sum(body & (np.abs(hv[:, ax] - lo[ax]) < 0.25 * L)); near_hi = np.sum(body & (np.abs(hv[:, ax] - hi[ax]) < 0.25 * L))
-    front, back = (lo[ax], hi[ax]) if near_lo < near_hi else (hi[ax], lo[ax])
+    L = hi[ax] - lo[ax]; hc = (hv[:, ax].min() + hv[:, ax].max()) / 2
+    front, back = (lo[ax], hi[ax]) if abs(lo[ax] - hc) > abs(hi[ax] - hc) else (hi[ax], lo[ax])
     sgn = 1.0 if back > front else -1.0
     # pin radius: measured over the first 2.5 mm from the pin's tip, where only the pin is near the axis
     # (further back the host itself - e.g. the alternator front - reaches into the pulley's length)
