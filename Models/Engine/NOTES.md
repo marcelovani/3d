@@ -309,3 +309,191 @@ cd Models/Engine
 **Status (2026-11-14): parked.** v4 is better than v3 but still not good enough: Cura shows lots of
 orphan edges. Next: Marcelo will simplify the source model himself, then we try again with a
 simpler approach on the simplified source.
+
+## Version 5: virtual scan of the simplified source (2026-11-21)
+
+**Source:** Marcelo simplified the model by hand in Blender (`work/strip1..8.blend`). `strip7.blend` is
+copied to `source/engine-simplified.blend` and is the source from here on: 28 pieces, 2.2M triangles,
+already upright, all pieces in their assembled position. `strip8.blend` is the same file with the cylinder
+head moved aside and the rocker cover and oil cap lifted (an exploded view); the shapes are identical.
+
+**Approach ("virtual 3D scanner", `scripts/v5/scan.py`)**, each piece on its own:
+1. Scale so fan to flywheel (x) is 150 mm (factor 229.25), min corner at 0, orientation unchanged.
+2. Sample the surface every G/2 into a voxel grid, 20,000 triangles at a time. G = piece size / 450, between
+   0.08 and 0.25 mm (raised automatically if a rotated grid would pass 400M voxels).
+3. A voxel is outside if a straight ray from it reaches open space without hitting the surface. Rays go in
+   78 directions: the 6 axis directions plus 6 for each of 12 random rotations (seed 1). That carves
+   pockets at an angle too, which v4's 6 directions could not.
+4. Solid = not outside, plus the surface thickened to at least 0.6 mm (single-sided sheets and thin fins
+   would otherwise print as nothing, and they caused v4's broken edges).
+5. Mesh with OpenVDB after a light blur, adaptivity 0.1 (block: 3.1M -> 1.1M triangles, 157 -> 56 MB,
+   still closed); drop loose crumbs under 1% of the biggest piece; count non-manifold edges and vertices
+   (0 on every piece tested).
+
+**Disk-full incident (2026-11-21):** the first full run sampled every point of a piece at once (the block
+alone was 900M+ points) and kept them for all 12 rotations. Blender pushed 38 GB into macOS swap and the
+disk filled up. Fixed: points are sampled in chunks straight into the grid, and the rotations use the
+surface voxel centres (1.4M for the block) instead of the raw points. The block now peaks at 3.6 GB of
+memory and takes about 70 s. Run long scans with a memory watchdog that kills Blender above 10 GB (see
+the command below).
+
+**Run** (output/ is git-ignored; `mkdir -p output/v5` first):
+```
+cd Models/Engine
+(/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/v5/scan.py -- source/engine-simplified.blend output/v5 [meshNN ...] > output/v5/log.txt 2>&1 & B=$!; while kill -0 $B 2>/dev/null; do [ "$(ps -o rss= -p $B | tr -d ' ')" -gt 10000000 ] && kill $B; sleep 2; done)
+/Applications/Blender.app/Contents/MacOS/Blender -b output/v5/scan.blend -P scripts/v5/sheet.py -- output/v5/contact-sheet.png 4
+```
+Writes one STL per piece, named after the Blender object (`mesh13.stl` …), plus `scan.blend` and a contact sheet.
+
+### v5 step 2: merge, split and name the pieces (2026-11-21)
+
+`images/v5-source-pieces.png` numbers the 28 source pieces (biggest first). Marcelo chose:
+- merge 3+10+22+20+16 into the cylinder head, with no gaps;
+- merge 9+25 into the sump;
+- split 4, 17, 23 and 26, which each held two separate parts.
+
+`scripts/v5/prepare.py` does it. It bakes world transforms, joins with `object.join`, and splits by k-means on
+loose-island centres weighted by island size. A plain box-overlap clustering kept the alternator in one
+piece, because small bolts bridge it to the water pump. It then renames everything and writes
+`source/engine-parts.blend` + `.obj`. The original `engine-simplified.blend` is never changed.
+```
+/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/v5/prepare.py -- source/engine-simplified.blend source/engine-parts.blend
+/Applications/Blender.app/Contents/MacOS/Blender -b source/engine-parts.blend -P scripts/v5/sheet.py -- images/v5-parts.png 4 z
+```
+`sheet.py ... z` orders the parts from the top of the engine down: `images/v5-parts.png`.
+
+Gaps measured (BVH nearest point, mm): 15–16 0.0, 26–72 0.0, 72–head 0.12, which the scan's 0.6 mm wall
+closes on its own. **16 (mesh74) doesn't touch the head**: it is 3.6 mm away, and it sits on mesh28
+(0.34 mm), which sits on the intake manifold (0.43 mm). So it was left out of the head, pending
+Marcelo's decision.
+
+Names were proposed from position: crank axis at y 87, z 52; fan axis at y 60, z 90 (mm, in the scan
+frame). The table is in `prepare.py` `NAME`, still to be confirmed by Marcelo. The guesses most likely
+to be wrong are the thermostat group (mesh28/74/9) and `head_front_cover` (mesh11).
+
+### v5 step 3: second round of merges, deletes and gap fixes (2026-11-21), 21 parts
+
+Marcelo's decisions, all in `prepare.py`:
+1. thermostat cover + ring + disc + housing are now one `thermostat_housing`. It sits on the intake
+   manifold, not the head (mesh74 never touched the head).
+2. The names were approved.
+3. `water_pump_hub` is merged into `water_pump`. `washer` and `rear_oil_seal` are deleted: both were
+   paper-thin and nothing rested on them. The exhaust manifold meets the head, and the rear plate meets
+   the block and the flywheel, at 0 mm either way.
+4. `crank_pulley_bolt` becomes `crank_pin`, merged into `timing_cover`. The crank pulley slides onto it.
+   - The pin keeps the shank, Ø3.66 mm, from where the head ended (head cut off) back 6.2 mm.
+   - The timing cover has an 11 mm hole on the crank line, and the block's crank tunnel is open behind
+     it, so the pin alone touched nothing. A plug, Ø12.2 mm and 2 mm deep, fills the hole and overlaps
+     its rim by 0.6 mm.
+   - The pulley bore is about Ø5.5, so it has about 0.9 mm clearance on the pin.
+
+Gaps closed with `snap()`: the smaller part moves straight along the nearest-point vector until it
+touches, plus 0.05 mm of overlap.
+
+| Part moved | Onto | Moved (mm) |
+| --- | --- | --- |
+| thermostat top | thermostat housing | 0.39 |
+| thermostat housing | intake manifold | 0.48 |
+| water pump hub | water pump | 1.40 |
+| oil cap | rocker cover | 0.65 |
+| oil filter | timing cover | 0.14 |
+| carburettor, with the air filter | intake manifold | 1.06 |
+
+`scripts/v5/contacts.py` lists every pair closer than 3 mm and each part's nearest neighbour.
+Afterwards every static part touches at least one other. The only gap left is the crank pulley, 0.07 mm
+from the timing cover, on purpose, because it spins.
+```
+/Applications/Blender.app/Contents/MacOS/Blender -b source/engine-parts.blend -P scripts/v5/contacts.py
+```
+Open point: the earlier motor plan ran a 3 mm steel axle along the crank line to turn the crank
+pulley. A solid pin there means the pulley is no longer driven by that axle.
+
+### v5 step 4: third round of merges (2026-11-21), 14 parts
+
+Numbers are from the 21-part sheet.
+1. 6+7: `cylinder_head` now includes `head_front_cover`.
+2. 4+8: `intake_manifold` now includes the carburettor.
+3. 11+12: `fan` now includes `fan_pulley`.
+4. 13+14+16+17+20: `block` now includes the timing cover (with the crank pin), alternator, rear plate and oil filter.
+5. On hold, 5 (thermostat_housing) into the head: it sits on the intake manifold and is 2.0 mm from the head.
+   Suggested putting it with the intake instead.
+
+The timing cover (0.71 mm) and the alternator (0.47 mm) had gaps to the block. They were filled with
+`bridge()` instead of `snap()`, because moving the timing cover would push it into the sump and water
+pump, which stay separate. `bridge()` copies every face of the part lying within 1.6 mm of the block and
+extrudes it onto the block (+0.1 mm), giving closed pads. Nothing moves, and the result is invisible from
+outside.
+
+`contacts.py` afterwards: every part touches another, except the crank pulley (0.07 mm, it spins).
+The flywheel touches the block (rear plate) at 0.001 mm. It spins too, so it will need clearance when
+the joins are designed.
+
+### v5 step 5: thermostat into the intake, water pump cleaned up (2026-11-21), 13 parts
+
+1. `thermostat_housing` is merged into `intake_manifold`: it sits on the intake (0.014 mm) and is 2 mm from the head.
+2. `rehome_loose('water_pump', max_size=10)` sorts the pump's loose pieces.
+   - Islands count as linked when within 0.15 mm, tested both ways. One way missed contacts: a small
+     island's vertex can sit on a big island's face.
+   - Bits under 10 mm move to the part they touch: a 7 mm tab with a peg and a 4 mm sliver, both
+     touching the block at 0 mm.
+   - Bigger pieces belong to the part. They stay, and `bridge()` fills their gap to the body, up to their
+     measured gap + 0.5 mm.
+   - The pump in the source is a stack of pieces with real gaps between them: body, ring, rear outlet
+     housing and front flange, with gaps up to 3.6 mm. Filled, it scans as 1 solid (40 crumbs dropped).
+   - Bug fixed on the way: deleting the first bit renumbered the vertices, so later bits copied and
+     deleted the wrong ones. It now plans every move first, copies all bits out, then deletes once.
+3. `run.sh` now reads `SRC` (default `source/engine-parts.blend`), so the scan works on the prepared parts.
+
+Lesson: other parts may also be stacks of pieces with gaps. Check each scan's `pieces` count, which
+should be 1, and fix any part that comes out in more than one piece the same way.
+
+### v5 step 6: correction, the thermostat housing belongs to the head (2026-11-21)
+
+Marcelo asked for 6+7+5 (head + head_front_cover + thermostat_housing). I argued it sat on the intake,
+because it was 0.43 mm from the intake and 1.83 mm from the head, then snapped it 0.48 mm onto the intake
+and merged it there. **He was right.** A gap that is the same all the way round can mean a spigot sitting
+in a hole, and nearest distance alone doesn't show which part something is fixed to. Ask, don't argue
+from one measurement.
+
+Now: no snap onto the intake, so the housing stays where the source put it. `bridge()` fills its side
+gap to the head (up to 2.33 mm, 758 faces), then it is merged into `cylinder_head`. The head test-scans
+as 1 solid, 0 non-manifold edges, peak 3.7 GB. Steps 4 and 5 above, which put it in the intake, are
+replaced by this.
+
+### v5 step 7: water pump into the block, alternator pin recovered (2026-11-21), 12 parts
+
+1. 7+10: `block` now includes `water_pump` (touching, 0.001 mm).
+2. **Alternator pin.** The hand simplification deleted the alternator's insides, so the pulley had nothing
+   to sit on.
+   - `scripts/v5/recover.py` finds islands of the original `source/engine.usdz`, which has the same
+     coordinates as `engine-simplified.blend`, that lie in a region and are missing from the simplified
+     file.
+   - Region: a cylinder on the alternator pulley's axis (mesh120, the half with lower y), radius 15 mm,
+     from the pulley's back face to 35 mm behind it.
+   - `:shaft` keeps only thin pieces on the axis (radius 2.2 mm or less). They may pass through the
+     pulley but not stick out in front.
+   - Marcelo: "we only need the pin to be part of the alternator+block because the pulley will go onto
+     the pin".
+   - Result: 468 islands, 40.6 mm long, starting 4.2 mm behind the pulley's front face. Saved as
+     `source/alternator-shaft.blend`, which is committed because `engine.usdz` is not.
+   - Earlier tries pulled in the whole interior: 1,670 islands of rotor, windings, nut, washers and the
+     original pulley's own pieces, which clashed with the separate pulley part.
+   ```
+   /Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/v5/recover.py -- source/engine.usdz source/engine-simplified.blend source/alternator-shaft.blend alternator_shaft "cyl:mesh120/pulley:15:35:shaft"
+   ```
+3. `attach_all(new, base)` splits the recovered object into pieces. Islands are linked when within
+   0.15 mm, tested both ways; bounding boxes alone are not enough, because a ring's box contains
+   everything inside it. Pieces touching the base join directly, and the rest are bridged nearest first,
+   up to 5 mm. The shaft came as 3 pieces, all bridged, with gaps of 1.1 to 2.5 mm.
+4. Scan memory cut: `seen()` and `blur()` no longer make full-size temporary copies (no `np.roll`, flipped
+   views, in-place `not`), and the grid is handed to `to_mesh` without a second reference. The block
+   (12-part version) scans to 1 solid, 0 non-manifold edges, peak 2.6 GB, down from >4 GB.
+5. Test-scan finding, using closed solids (an inside test on the open-shell source is meaningless):
+   - The pulley's back already overlaps the alternator front by up to about 2 mm in the original model,
+     with or without the pin.
+   - The pin scans to about Ø5 mm, against the pulley bore of Ø3.86 mm.
+   - Both need clearance cuts when the joins are designed.
+
+**In git (2026-11-21):** `source/engine-simplified.blend` (Marcelo's hand-simplified source, 65 MB) and
+`source/alternator-shaft.blend` are committed. `source/engine-parts.blend` and `.obj` are git-ignored:
+`prepare.py` rebuilds them, and the .obj is 181 MB, over GitHub's 100 MB file limit.

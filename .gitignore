@@ -16,5 +16,9 @@ output/
 # Engine: CC BY 3.0 — the glTF zip is committed; the .usdz copy (86 MB, unused) is not.
 **/source/*.usdz
 
+# Engine: rebuilt from engine-simplified.blend by scripts/v5/prepare.py (the .obj is over GitHub's 100 MB limit)
+Models/Engine/source/engine-parts.blend
+Models/Engine/source/engine-parts.obj
+
 # Code index
 .codegraph/

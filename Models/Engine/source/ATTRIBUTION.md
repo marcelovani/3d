@@ -8,6 +8,9 @@ https://creativecommons.org/licenses/by/3.0/
 
 `engine-gltf.zip` is the unmodified glTF download.
 
+`engine-simplified.blend` is Marcelo's hand simplification of the same model (internals and small parts
+removed, 28 pieces). `alternator-shaft.blend` holds the alternator shaft copied back from the original.
+
 ## Changes made in this repository
 
 The build scripts in `../scripts/` turn it into a printable model: turned upright, scaled to 150 mm,
